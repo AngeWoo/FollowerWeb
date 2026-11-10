@@ -26,17 +26,17 @@ function render(sec, items) {
 // 讀取 DOC/<區>/ 的目錄瀏覽清單（IIS Directory Browsing / Nginx autoindex 皆可）
 const EXTS = ['pdf', 'doc', 'docx'];
 const pad = n => String(n).padStart(2, '0');
-async function listDir(sec) {
-  const base = `DOC/${sec}/`;
+async function listDir(sec, root) {
+  const base = `${root}${sec}/`;
   const res = await fetch(base + '?' + Date.now());
-  if (!res.ok) throw new Error('目錄 ' + base + ' 回應 HTTP ' + res.status);
+  if (!res.ok) throw new Error(base + ' 回應 HTTP ' + res.status);
   const html = await res.text();
   const items = [], re = /([^<>]*?)<a\s+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
   let m;
   while ((m = re.exec(html))) {
     const href = m[2];
     if (/\/$/.test(href) || href.startsWith('?')) continue;          // 略過子資料夾、排序連結
-    const file = decodeURIComponent(new URL(href, location.origin + '/' + base).pathname.split('/').pop());
+    const file = decodeURIComponent(new URL(href, new URL(base, location.href)).pathname.split('/').pop());
     const ext = (file.split('.').pop() || '').toLowerCase();
     if (!EXTS.includes(ext) || file.startsWith('.')) continue;
     const meta = m[1].match(/(.+?\d{1,2}:\d{2}\s*[AP]M)\s+(\d+)?\s*$/i);   // IIS: 日期 時間 大小
@@ -51,19 +51,26 @@ async function listDir(sec) {
   return items;
 }
 // 備援清單：DOC/manifest.json（在本機執行「更新清單.command」產生，連同檔案一起上傳）
-let MAN;
-async function fromManifest(sec) {
-  MAN = MAN || await fetch('DOC/manifest.json?' + Date.now()).then(r => { if (!r.ok) throw new Error('manifest.json 回應 HTTP ' + r.status); return r.json(); });
-  return (MAN[sec] || []).map(i => {
+const MANS = {};
+async function fromManifest(sec, root) {
+  const man = MANS[root] = MANS[root] || await fetch(root + 'manifest.json?' + Date.now()).then(r => { if (!r.ok) throw new Error(root + 'manifest.json 回應 HTTP ' + r.status); return r.json(); });
+  return (man[sec] || []).map(i => {
     const f = i.file.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
-    return { ...i, date: f ? `${f[1]}-${f[2]}-${f[3]}` : i.date, path: `DOC/${sec}/` + i.file.replace(/[%#?]/g, encodeURIComponent) };
+    return { ...i, date: f ? `${f[1]}-${f[2]}-${f[3]}` : i.date, path: `${root}${sec}/` + i.file.replace(/[%#?]/g, encodeURIComponent) };
   }).sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
 }
-// 每次載入/重新整理都重新讀目錄；目錄瀏覽不可用時才退回 manifest.json
+// DOC 可能在頁面所在資料夾（DOC/），也可能在網站根目錄（/DOC/），依序嘗試
+const ROOTS = ['DOC/', '/DOC/'];
 const ERRS = {};
-const load = sec => listDir(sec)
-  .then(x => x.length ? x : Promise.reject(new Error('目錄可讀取，但找不到 pdf/doc/docx 檔')))
-  .catch(e1 => fromManifest(sec).catch(e2 => { ERRS[sec] = e1.message + '；' + e2.message; return null; }));
+async function load(sec) {
+  const errs = [];
+  for (const root of ROOTS) {
+    try { const x = await listDir(sec, root); if (x.length) return x; errs.push(root + sec + '/ 可讀取，但找不到 pdf/doc/docx 檔'); }
+    catch (e) { errs.push(e.message); }
+    try { return await fromManifest(sec, root); } catch (e) { errs.push(e.message); }
+  }
+  ERRS[sec] = [...new Set(errs)].join('；'); return null;
+}
 const LISTS = {};
 Promise.all(TABS.map(t => load(t).then(items => { LISTS[t] = items || []; render(t, items); })))
   .then(() => openByHash());
@@ -85,8 +92,8 @@ document.getElementById('mclose').onclick = closeModal;
 modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-async function preview(path, setHash = true) {
-  if (setHash) { const p = path.split('/'); history.replaceState(null, '', '#' + p[1] + '/' + decodeURIComponent(p.slice(2).join('/'))); }
+async function preview(path, setHash = true, sec = '', file = '') {
+  if (setHash && sec) history.replaceState(null, '', '#' + sec + '/' + file);
   const url = path, ext = path.split('.').pop().toLowerCase();
   document.getElementById('mtitle').textContent = decodeURIComponent(path.split('/').pop());
   const dl = document.getElementById('mdl'); dl.href = url;
@@ -106,5 +113,5 @@ async function preview(path, setHash = true) {
 }
 document.addEventListener('click', e => {
   const a = e.target.closest('a.pv');
-  if (a) { e.preventDefault(); preview(a.dataset.p); }
+  if (a) { e.preventDefault(); preview(a.dataset.p, true, a.dataset.s, a.dataset.f); }
 });
