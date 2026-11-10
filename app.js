@@ -50,10 +50,13 @@ async function listDir(sec, root) {
   items.sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
   return items;
 }
-// 備援清單：DOC/manifest.json（在本機執行「更新清單.command」產生，連同檔案一起上傳）
+// 讀取 JSON 格式清單（優先使用 IIS 動態掃描 list.ashx，備援使用靜態 DOC/manifest.json）
 const MANS = {};
-async function fromManifest(sec, root) {
-  const man = MANS[root] = MANS[root] || await fetch(root + 'manifest.json?_=' + Date.now() + Math.random(), { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(root + 'manifest.json 回應 HTTP ' + r.status); return r.json(); });
+async function fromJson(url, sec, root) {
+  const man = MANS[url] = MANS[url] || await fetch(url + '?_=' + Date.now() + Math.random(), { cache: 'no-store' }).then(async r => {
+    if (!r.ok) throw new Error(url + ' 回應 HTTP ' + r.status);
+    try { return await r.json(); } catch (_) { throw new Error(url + ' 非 JSON 回應'); }
+  });
   return (man[sec] || []).map(i => {
     const f = i.file.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
     return { ...i, date: f ? `${f[1]}-${f[2]}-${f[3]}` : i.date, path: `${root}${sec}/` + i.file.replace(/[%#?]/g, encodeURIComponent) };
@@ -64,10 +67,11 @@ const ROOTS = ['DOC/', '/DOC/'];
 const ERRS = {};
 async function load(sec) {
   const errs = [];
+  try { return await fromJson('list.ashx', sec, 'DOC/'); } catch (e) { errs.push(e.message); }
   for (const root of ROOTS) {
     try { const x = await listDir(sec, root); if (x.length) return x; errs.push(root + sec + '/ 可讀取，但找不到 pdf/doc/docx 檔'); }
     catch (e) { errs.push(e.message); }
-    try { return await fromManifest(sec, root); } catch (e) { errs.push(e.message); }
+    try { return await fromJson(root + 'manifest.json', sec, root); } catch (e) { errs.push(e.message); }
   }
   ERRS[sec] = [...new Set(errs)].join('；'); return null;
 }
