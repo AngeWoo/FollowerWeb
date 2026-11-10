@@ -7,6 +7,10 @@ function Get-ManifestJson {
   $out = [ordered]@{}
   foreach ($sec in 'notice','calendar','download') {
     $dir = Join-Path $root "DOC\$sec"
+    if ($sec -eq 'calendar' -and -not (Test-Path -LiteralPath $dir)) {
+      $alt = Join-Path $root "DOC\calender"
+      if (Test-Path -LiteralPath $alt) { $dir = $alt }
+    }
     $items = @()
     if (Test-Path -LiteralPath $dir) {
       $items = @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue |

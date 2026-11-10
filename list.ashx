@@ -14,6 +14,7 @@ public class DocList : IHttpHandler {
 
     public void ProcessRequest(HttpContext ctx) {
         ctx.Response.ContentType = "application/json; charset=utf-8";
+        ctx.Response.ContentEncoding = Encoding.UTF8;
         ctx.Response.Cache.SetCacheability(HttpCacheability.NoCache);
         ctx.Response.Cache.SetNoStore();
 
@@ -26,6 +27,10 @@ public class DocList : IHttpHandler {
             string sec = Secs[s];
             sb.Append("\"").Append(sec).Append("\":[");
             string dir = Path.Combine(docRoot, sec);
+            if (sec == "calendar" && !Directory.Exists(dir)) {
+                string alt = Path.Combine(docRoot, "calender");
+                if (Directory.Exists(alt)) dir = alt;
+            }
             if (Directory.Exists(dir)) {
                 FileInfo[] files = new DirectoryInfo(dir).GetFiles();
                 bool first = true;

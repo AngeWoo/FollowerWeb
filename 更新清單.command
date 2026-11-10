@@ -2,6 +2,7 @@
 # 在 Mac 上雙擊執行：掃描 DOC/notice、calendar、download，產生 DOC/manifest.json
 # 之後把 DOC 資料夾（含 manifest.json）整個上傳到網站即可。
 cd "$(dirname "$0")" || exit 1
+dot_clean -m . 2>/dev/null
 esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 out="DOC/manifest.json"; tmp=$(mktemp)
 {
