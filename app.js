@@ -1,4 +1,10 @@
 const TABS = ['notice', 'calendar', 'download'];
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+const scrollTop = () => { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; };
+scrollTop();
+window.addEventListener('load', () => { scrollTop(); setTimeout(scrollTop, 60); });
+window.addEventListener('pageshow', () => { scrollTop(); setTimeout(scrollTop, 60); });
+
 const fmt = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -12,15 +18,45 @@ function show(tab) {
 }
 const hashParts = () => { const h = decodeURIComponent(location.hash.slice(1)), i = h.indexOf('/');
   return i < 0 ? [h, ''] : [h.slice(0, i), h.slice(i + 1)]; };
-window.addEventListener('hashchange', () => { const [t, f] = hashParts(); show(t); if (f) openByHash(); else closeModal(); });
+window.addEventListener('hashchange', () => { const [t, f] = hashParts(); show(t); scrollTop(); if (f) openByHash(); else closeModal(); });
 
-function render(sec, items) {
-  const ul = document.querySelector(`#${sec} .list`);
-  if (items === null) { ul.innerHTML = '<li class="empty">無法讀取檔案清單<br><small>' + esc(ERRS[sec] || '') + '</small><br><small>請確認伺服器已開啟 DOC 目錄瀏覽，或已上傳 DOC/manifest.json</small></li>'; return; }
-  if (!items.length) { ul.innerHTML = '<li class="empty">目前沒有檔案</li>'; return; }
-  ul.innerHTML = items.map(i => `<li>
+const PAGE_SIZE = 10;
+const PAGES = { notice: 1, calendar: 1, download: 1 };
+
+function render(sec, items, page = PAGES[sec] || 1) {
+  const secEl = document.getElementById(sec);
+  const ul = secEl.querySelector('.list');
+  let pager = secEl.querySelector('.pager');
+  if (!pager) {
+    pager = document.createElement('div');
+    pager.className = 'pager';
+    secEl.appendChild(pager);
+  }
+  if (items === null) {
+    ul.innerHTML = '<li class="empty">無法讀取檔案清單<br><small>' + esc(ERRS[sec] || '') + '</small><br><small>請確認伺服器已開啟 DOC 目錄瀏覽，或已上傳 DOC/manifest.json</small></li>';
+    pager.innerHTML = '';
+    return;
+  }
+  if (!items.length) {
+    ul.innerHTML = '<li class="empty">目前沒有檔案</li>';
+    pager.innerHTML = '';
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  page = Math.min(Math.max(1, page), totalPages);
+  PAGES[sec] = page;
+  const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  ul.innerHTML = pageItems.map(i => `<li>
     <a class="pv" href="${i.path}" data-p="${esc(i.path)}" data-f="${esc(i.file)}" data-s="${sec}">${esc(i.name)}</a>
     <span class="btns"><a class="dl" href="${i.path}" download="${esc(i.file)}">下載 ${i.ext === 'pdf' ? 'PDF' : 'Word'}</a></span></li>`).join('');
+
+  let btns = `<button type="button" class="pg-btn" data-sec="${sec}" data-pg="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一頁</button>`;
+  for (let p = 1; p <= totalPages; p++) {
+    btns += `<button type="button" class="pg-btn ${p === page ? 'on' : ''}" data-sec="${sec}" data-pg="${p}">${p}</button>`;
+  }
+  btns += `<button type="button" class="pg-btn" data-sec="${sec}" data-pg="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一頁</button>`;
+  btns += `<span class="pg-info">第 ${page} / ${totalPages} 頁（共 ${items.length} 筆）</span>`;
+  pager.innerHTML = btns;
 }
 
 // 讀取 DOC/<區>/ 的目錄瀏覽清單（IIS Directory Browsing / Nginx autoindex 皆可）
@@ -131,7 +167,7 @@ async function load(sec) {
 }
 const LISTS = {};
 Promise.all(TABS.map(t => load(t).then(items => { LISTS[t] = items || []; render(t, items); })))
-  .then(() => openByHash());
+  .then(() => { scrollTop(); openByHash(); });
 function openByHash() {
   const [t, f] = hashParts(); if (!f) return;
   const it = (LISTS[t] || []).find(i => i.file === f);
@@ -171,6 +207,22 @@ async function preview(path, setHash = true, sec = '', file = '') {
   }
 }
 document.addEventListener('click', e => {
+  const navLink = e.target.closest('nav a[data-tab]');
+  if (navLink) {
+    e.preventDefault();
+    const tab = navLink.dataset.tab;
+    history.replaceState(null, '', '#' + tab);
+    show(tab);
+    closeModal();
+    scrollTop();
+    return;
+  }
+  const pg = e.target.closest('button.pg-btn');
+  if (pg && !pg.disabled) {
+    const s = pg.dataset.sec, p = +pg.dataset.pg;
+    if (s && LISTS[s]) { render(s, LISTS[s], p); scrollTop(); }
+    return;
+  }
   const a = e.target.closest('a.pv');
   if (a) { e.preventDefault(); preview(a.dataset.p, true, a.dataset.s, a.dataset.f); }
 });

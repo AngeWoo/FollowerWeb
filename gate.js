@@ -13,7 +13,7 @@ function sha256(s){const K=[];let p=2;while(K.length<64){let ok=1;for(let i=2;i*
    a.pop();a.unshift((t1+t2)|0);a[4]=(a[4]+t1)|0}
   for(let i=0;i<8;i++)H[i]=(H[i]+a[i])|0}
  return H.map(x=>(x>>>0).toString(16).padStart(8,"0")).join("")}
-const ok = () => document.body.classList.remove("locked");
+const ok = () => { document.body.classList.remove("locked"); window.scrollTo(0, 0); };
 try { if (sessionStorage.getItem("ok") === HASH) ok(); } catch (e) {}
 document.getElementById("gform").addEventListener("submit", e => {
   e.preventDefault();

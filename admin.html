@@ -37,9 +37,15 @@
   .gh-box summary { cursor: pointer; font-weight: bold; color: #4a5a78; }
   .gh-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
   .gh-row input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-  @media(max-width:700px) {
-    .admin-card { padding: 16px; }
-    table.adm-tbl th:nth-child(3), table.adm-tbl td:nth-child(3) { display: none; }
+  @media(max-width:768px) {
+    #admin-wrap { margin: 0; padding: 0; width: 100%; }
+    .admin-card { padding: 14px 12px 32px; border-radius: 0; margin-bottom: 0; min-height: 100dvh; box-shadow: none; }
+    .admin-top h1 { font-size: 20px; }
+    .sec-box { padding: 12px; border-radius: 10px; }
+    table.adm-tbl thead { display: none; }
+    table.adm-tbl, table.adm-tbl tbody, table.adm-tbl tr, table.adm-tbl td { display: block; width: 100%; }
+    table.adm-tbl tr { border: 1px solid #e0d6c5; border-radius: 8px; padding: 8px; margin-bottom: 10px; background: #fff; }
+    table.adm-tbl td { border: 0; padding: 4px 0; width: 100% !important; text-align: left !important; }
   }
 </style>
 </head>
