@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>事務局 - 下載・公告・行事曆</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="locked">
+<div id="gate">
+  <form id="gform" autocomplete="off">
+    <h1>信徒專區</h1>
+    <p>請輸入密碼進入網站</p>
+    <input id="gpw" type="password" inputmode="numeric" placeholder="密碼" autofocus>
+    <button type="submit">進 入</button>
+    <div id="gerr" role="alert"></div>
+  </form>
+</div>
+<div id="wrap">
+<div id="banner">
+  <div class="zone">信徒專區</div>
+  <nav>
+    <a href="#notice" data-tab="notice">事務局公告</a>
+    <a href="#calendar" data-tab="calendar">行事曆</a>
+    <a href="#download" data-tab="download">下 載</a>
+  </nav>
+</div>
+<div id="card">
+  <div class="crumb">您現在的位置：真如苑信徒專區 &gt;<span id="crumb"></span></div>
+  <section id="notice"><h2>事務局公告</h2><div class="head"><span>標題</span><span>詳細內容</span></div><ul class="list"></ul></section>
+  <section id="calendar"><h2>行事曆</h2><div class="head"><span>標題</span><span>詳細內容</span></div><ul class="list"></ul></section>
+  <section id="download"><h2>下載</h2><div class="head"><span>標題</span><span>詳細內容</span></div><ul class="list"></ul></section>
+</div>
+<footer>© 2008 中華民國真如苑佛教會 版權所有</footer>
+</div>
+<div id="modal" hidden>
+  <div class="box">
+    <div class="bar"><b id="mtitle"></b><span><a id="mdl" download>下載</a><button id="mclose" aria-label="關閉">✕</button></span></div>
+    <div id="mbody"></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx-preview/0.3.3/docx-preview.min.js"></script>
+<script src="gate.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
