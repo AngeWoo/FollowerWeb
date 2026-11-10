@@ -20,6 +20,28 @@ public class DocList : IHttpHandler {
 
         string docRoot = ctx.Server.MapPath("DOC");
         if (!Directory.Exists(docRoot)) docRoot = ctx.Server.MapPath("/DOC");
+        string manifestPath = Path.Combine(docRoot, "manifest.json");
+
+        // 支援從後台 (admin.html) POST 直接儲存自訂的 manifest.json
+        if (ctx.Request.HttpMethod == "POST") {
+            try {
+                using (StreamReader sr = new StreamReader(ctx.Request.InputStream, Encoding.UTF8)) {
+                    string body = sr.ReadToEnd();
+                    if (string.IsNullOrWhiteSpace(body) || !body.TrimStart().StartsWith("{")) {
+                        ctx.Response.StatusCode = 400;
+                        ctx.Response.Write("{\"ok\":false,\"error\":\"無效的 JSON 格式\"}");
+                        return;
+                    }
+                    File.WriteAllText(manifestPath, body, new UTF8Encoding(false));
+                    ctx.Response.Write("{\"ok\":true}");
+                    return;
+                }
+            } catch (Exception ex) {
+                ctx.Response.StatusCode = 500;
+                ctx.Response.Write("{\"ok\":false,\"error\":\"" + Esc(ex.Message) + "\"}");
+                return;
+            }
+        }
 
         StringBuilder sb = new StringBuilder("{");
         for (int s = 0; s < Secs.Length; s++) {
@@ -52,7 +74,14 @@ public class DocList : IHttpHandler {
             sb.Append("]");
         }
         sb.Append("}");
-        ctx.Response.Write(sb.ToString());
+        string jsonOut = sb.ToString();
+
+        // 若帶有 ?save=1 參數，順便將掃描結果寫入 DOC/manifest.json
+        if (ctx.Request.QueryString["save"] == "1") {
+            try { File.WriteAllText(manifestPath, jsonOut, new UTF8Encoding(false)); } catch { }
+        }
+
+        ctx.Response.Write(jsonOut);
     }
 
     public bool IsReusable { get { return true; } }

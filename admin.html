@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>後台管理 - 更新檔案清單 (manifest.json)</title>
+<script>document.write('<link rel="stylesheet" href="style.css?v='+Date.now()+'">')</script>
+<style>
+  #admin-wrap { width: min(1060px, 100%); margin: 24px auto 60px; padding: 0 16px; }
+  .admin-card { background: #fff; border-radius: 18px; box-shadow: 0 3px 12px rgba(0,0,0,.18); padding: 24px 32px; margin-bottom: 24px; }
+  .admin-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 3px solid #e6d9c3; padding-bottom: 16px; margin-bottom: 18px; }
+  .admin-top h1 { margin: 0; color: #a0825a; font-size: 26px; letter-spacing: 2px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .btn { background: #a58a63; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font-size: 16px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; font-weight: bold; }
+  .btn:hover { background: #8b7250; }
+  .btn.pri { background: #2e7d32; }
+  .btn.pri:hover { background: #1b5e20; }
+  .btn.sec { background: #4a5a78; }
+  .btn.sec:hover { background: #37445c; }
+  .btn.sm { padding: 5px 10px; font-size: 14px; font-weight: normal; }
+  .btn.del { background: #c0392b; padding: 5px 10px; font-size: 14px; }
+  .btn.del:hover { background: #962d22; }
+  .status-bar { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 15px; display: none; }
+  .status-bar.ok { display: block; background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+  .status-bar.err { display: block; background: #fdecea; color: #b71c1c; border: 1px solid #f5c6cb; }
+  .status-bar.info { display: block; background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
+  .sec-box { border: 1px solid #e0d6c5; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; background: #faf8f5; }
+  .sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .sec-head h3 { margin: 0; color: #4a5a78; font-size: 20px; }
+  table.adm-tbl { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+  table.adm-tbl th, table.adm-tbl td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 15px; }
+  table.adm-tbl th { background: #efe9df; color: #5a4a35; font-weight: bold; }
+  table.adm-tbl input[type="text"], table.adm-tbl input[type="date"] { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+  .json-area { width: 100%; height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; padding: 12px; border: 1px solid #cdbfa5; border-radius: 8px; background: #272822; color: #f8f8f2; resize: vertical; }
+  .gh-box { background: #f4f6f9; border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; }
+  .gh-box summary { cursor: pointer; font-weight: bold; color: #4a5a78; }
+  .gh-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  .gh-row input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+  @media(max-width:700px) {
+    .admin-card { padding: 16px; }
+    table.adm-tbl th:nth-child(3), table.adm-tbl td:nth-child(3) { display: none; }
+  }
+</style>
+</head>
+<body class="locked">
+<div id="gate">
+  <form id="gform" autocomplete="off">
+    <h1>後台管理</h1>
+    <p>請輸入後台密碼進入清單管理</p>
+    <input id="gpw" type="password" placeholder="後台密碼" autofocus>
+    <button type="submit">進 入</button>
+    <div id="gerr" role="alert"></div>
+  </form>
+</div>
+
+<div id="wrap">
+  <div id="admin-wrap">
+    <div class="admin-card">
+      <div class="admin-top">
+        <h1>檔案清單管理後台 (DOC/manifest.json)</h1>
+        <a class="btn sec sm" href="index.html">← 返回前台首頁</a>
+      </div>
+
+      <div id="status" class="status-bar"></div>
+
+      <div class="toolbar">
+        <button type="button" class="btn sec" id="btn-scan">🔄 自動掃描目錄已上傳檔案</button>
+        <button type="button" class="btn pri" id="btn-save">💾 立即儲存生效</button>
+        <button type="button" class="btn" id="btn-dl">⬇️ 下載 manifest.json</button>
+        <button type="button" class="btn sm" id="btn-copy">📋 複製 JSON</button>
+      </div>
+
+      <details class="gh-box" id="gh-details">
+        <summary>⚙️ GitHub 遠端直接寫入設定（若網站架設於 GitHub Pages 可設定一次，按「立即儲存生效」即可直接更新 GitHub）</summary>
+        <div class="gh-row">
+          <label>GitHub 帳號/倉庫：</label>
+          <input type="text" id="gh-repo" value="AngeWoo/FollowerWeb" style="width:210px" placeholder="AngeWoo/FollowerWeb">
+          <label>分支：</label>
+          <input type="text" id="gh-branch" value="main" style="width:80px" placeholder="main">
+          <label>GitHub Token (PAT)：</label>
+          <input type="password" id="gh-token" style="flex:1;min-width:220px" placeholder="貼上 ghp_... 或 github_pat_... (僅存於本機瀏覽器)">
+          <button type="button" class="btn sm sec" id="btn-gh-save">記住設定</button>
+        </div>
+        <div style="margin-top:6px;color:#666">
+          提示：在 IIS 伺服器環境下不需填寫此項，按「💾 立即儲存生效」會直接透過 <code>list.ashx</code> 寫入伺服器硬碟。若在 GitHub Pages，填入具有 <code>repo</code> 或 <code>contents:write</code> 權限的 Token 後，按「💾 立即儲存生效」即可一鍵寫入 GitHub 上的 <code>DOC/manifest.json</code>。
+        </div>
+      </details>
+
+      <div id="sections"></div>
+
+      <div class="sec-box">
+        <div class="sec-head">
+          <h3>📄 DOC/manifest.json 原始碼（可直接編輯，與上方表格即時同步）</h3>
+          <button type="button" class="btn sm sec" id="btn-apply-json">套用下方 JSON 至表格</button>
+        </div>
+        <textarea id="json-editor" class="json-area" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 後台獨立密碼驗證（預設密碼：shinnyo2026）
+const ADMIN_HASH = "e6da3ad9322c5368c3164933d46c59870cc1c91f201d8a5595503e24b750855a";
+function sha256(s){const K=[];let p=2;while(K.length<64){let ok=1;for(let i=2;i*i<=p;i++)if(p%i==0){ok=0;break}if(ok)K.push((Math.cbrt(p)%1)*4294967296|0);p++}
+ const b=unescape(encodeURIComponent(s)),w=[];for(let i=0;i<b.length;i++)w[i>>2]|=b.charCodeAt(i)<<(24-(i%4)*8);
+ const L=b.length*8;w[L>>5]|=0x80<<(24-L%32);w[((L+64>>9)<<4)+15]=L;
+ let H=[],q=2,n=0;while(n<8){let ok=1;for(let i=2;i*i<=q;i++)if(q%i==0){ok=0;break}if(ok){H.push((Math.sqrt(q)%1)*4294967296|0);n++}q++}
+ const r=(x,n)=>x>>>n|x<<(32-n);
+ for(let o=0;o<w.length;o+=16){const a=H.slice(),m=[];
+  for(let t=0;t<64;t++){if(t<16)m[t]=w[o+t]|0;else{const x=m[t-15],y=m[t-2];m[t]=(m[t-16]+(r(x,7)^r(x,18)^x>>>3)+m[t-7]+(r(y,17)^r(y,19)^y>>>10))|0}
+   const t1=(a[7]+(r(a[4],6)^r(a[4],11)^r(a[4],25))+((a[4]&a[5])^(~a[4]&a[6]))+K[t]+m[t])|0;
+   const t2=((r(a[0],2)^r(a[0],13)^r(a[0],22))+((a[0]&a[1])^(a[0]&a[2])^(a[1]&a[2])))|0;
+   a.pop();a.unshift((t1+t2)|0);a[4]=(a[4]+t1)|0}
+  for(let i=0;i<8;i++)H[i]=(H[i]+a[i])|0}
+ return H.map(x=>(x>>>0).toString(16).padStart(8,"0")).join("")}
+const unlockAdmin = () => document.body.classList.remove("locked");
+try { if (sessionStorage.getItem("adm_ok") === ADMIN_HASH) unlockAdmin(); } catch (e) {}
+document.getElementById("gform").addEventListener("submit", e => {
+  e.preventDefault();
+  if (sha256(document.getElementById("gpw").value.trim()) === ADMIN_HASH) {
+    try { sessionStorage.setItem("adm_ok", ADMIN_HASH); } catch (e) {}
+    unlockAdmin();
+  } else {
+    document.getElementById("gerr").textContent = "後台密碼錯誤，請再試一次";
+    document.getElementById("gpw").value = ""; document.getElementById("gpw").focus();
+  }
+});
+</script>
+<script>
+const SECS = [
+  { key: 'notice',   title: '事務局公告 (DOC/notice/)' },
+  { key: 'calendar', title: '行事曆 (DOC/calendar/ 或 DOC/calender/)' },
+  { key: 'download', title: '下載 (DOC/download/)' }
+];
+const EXTS = ['pdf', 'doc', 'docx'];
+const pad = n => String(n).padStart(2, '0');
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+
+let DATA = { notice: [], calendar: [], download: [] };
+
+const statusEl = document.getElementById('status');
+function showStatus(msg, type = 'info') {
+  statusEl.className = 'status-bar ' + type;
+  statusEl.innerHTML = msg;
+}
+
+// 讀取與儲存 GitHub 設定（本機 localStorage）
+const ghRepoEl = document.getElementById('gh-repo');
+const ghBranchEl = document.getElementById('gh-branch');
+const ghTokenEl = document.getElementById('gh-token');
+try {
+  if (localStorage.getItem('adm_gh_repo')) ghRepoEl.value = localStorage.getItem('adm_gh_repo');
+  if (localStorage.getItem('adm_gh_branch')) ghBranchEl.value = localStorage.getItem('adm_gh_branch');
+  if (localStorage.getItem('adm_gh_token')) ghTokenEl.value = localStorage.getItem('adm_gh_token');
+} catch (_) {}
+document.getElementById('btn-gh-save').onclick = () => {
+  try {
+    localStorage.setItem('adm_gh_repo', ghRepoEl.value.trim());
+    localStorage.setItem('adm_gh_branch', ghBranchEl.value.trim());
+    localStorage.setItem('adm_gh_token', ghTokenEl.value.trim());
+    showStatus('✅ 已記住 GitHub 設定於本機瀏覽器。', 'ok');
+  } catch (e) { showStatus('無法儲存至 localStorage：' + e.message, 'err'); }
+};
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function syncJsonEditor() {
+  const clean = { notice: DATA.notice || [], calendar: DATA.calendar || [], download: DATA.download || [] };
+  document.getElementById('json-editor').value = JSON.stringify(clean, null, 2);
+}
+
+function renderTables() {
+  const container = document.getElementById('sections');
+  container.innerHTML = SECS.map(s => {
+    const list = DATA[s.key] || [];
+    const rows = list.length ? list.map((it, idx) => `
+      <tr>
+        <td><input type="text" data-sec="${s.key}" data-idx="${idx}" data-field="name" value="${esc(it.name)}"></td>
+        <td><input type="text" data-sec="${s.key}" data-idx="${idx}" data-field="file" value="${esc(it.file)}"></td>
+        <td style="width:145px"><input type="date" data-sec="${s.key}" data-idx="${idx}" data-field="date" value="${esc(it.date)}"></td>
+        <td style="width:130px;text-align:center;white-space:nowrap">
+          <button type="button" class="btn sm sec" onclick="moveItem('${s.key}',${idx},-1)" title="上移">▲</button>
+          <button type="button" class="btn sm sec" onclick="moveItem('${s.key}',${idx},1)" title="下移">▼</button>
+          <button type="button" class="btn del" onclick="removeItem('${s.key}',${idx})" title="刪除">✕</button>
+        </td>
+      </tr>
+    `).join('') : `<tr><td colspan="4" style="text-align:center;color:#889;padding:16px">目前沒有項目，請點上方「自動掃描」或右方「＋ 新增」</td></tr>`;
+
+    return `
+      <div class="sec-box">
+        <div class="sec-head">
+          <h3>📁 ${s.title} <small style="color:#778;font-weight:normal">（共 ${list.length} 筆）</small></h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label class="btn sm sec" style="cursor:pointer">
+              📂 從電腦選檔帶入檔名
+              <input type="file" multiple accept=".pdf,.doc,.docx" style="display:none" onchange="pickFiles('${s.key}', this.files); this.value='';">
+            </label>
+            <button type="button" class="btn sm" onclick="addItem('${s.key}')">＋ 手動新增一筆</button>
+          </div>
+        </div>
+        <table class="adm-tbl">
+          <thead>
+            <tr>
+              <th>顯示標題 (name)</th>
+              <th>實際檔案名稱 (file，含 .pdf / .docx)</th>
+              <th>日期 (date)</th>
+              <th style="text-align:center">排序 / 刪除</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }).join('');
+  syncJsonEditor();
+}
+
+document.getElementById('sections').addEventListener('input', e => {
+  const el = e.target;
+  const sec = el.dataset.sec, idx = +el.dataset.idx, field = el.dataset.field;
+  if (!sec || isNaN(idx) || !field) return;
+  const item = DATA[sec][idx];
+  if (!item) return;
+  item[field] = el.value;
+  if (field === 'file') {
+    const ext = (el.value.split('.').pop() || '').toLowerCase();
+    if (EXTS.includes(ext)) item.ext = ext;
+    if (!item.name || item.name === el.defaultValue.replace(/\.[^.]+$/, '')) {
+      item.name = el.value.replace(/\.[^.]+$/, '');
+    }
+  }
+  syncJsonEditor();
+});
+
+window.addItem = function(sec) {
+  DATA[sec] = DATA[sec] || [];
+  DATA[sec].unshift({ name: '新檔案標題', file: '檔案名稱.pdf', ext: 'pdf', size: 0, date: todayStr() });
+  renderTables();
+};
+
+window.removeItem = function(sec, idx) {
+  DATA[sec].splice(idx, 1);
+  renderTables();
+};
+
+window.moveItem = function(sec, idx, dir) {
+  const arr = DATA[sec];
+  const target = idx + dir;
+  if (target < 0 || target >= arr.length) return;
+  const tmp = arr[idx];
+  arr[idx] = arr[target];
+  arr[target] = tmp;
+  renderTables();
+};
+
+window.pickFiles = function(sec, files) {
+  if (!files || !files.length) return;
+  DATA[sec] = DATA[sec] || [];
+  for (const f of files) {
+    if (f.name.startsWith('.')) continue;
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (!EXTS.includes(ext)) continue;
+    const d = f.lastModified ? new Date(f.lastModified) : new Date();
+    const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const baseName = f.name.replace(/\.[^.]+$/, '');
+    const existIdx = DATA[sec].findIndex(x => x.file === f.name);
+    const entry = { name: baseName, file: f.name, ext, size: f.size || 0, date: dateStr };
+    if (existIdx >= 0) DATA[sec][existIdx] = { ...DATA[sec][existIdx], ...entry };
+    else DATA[sec].unshift(entry);
+  }
+  renderTables();
+  showStatus(`✅ 已帶入 ${files.length} 個檔案至「${sec}」，請確認無誤後點選「💾 立即儲存生效」。`, 'ok');
+};
+
+document.getElementById('btn-apply-json').onclick = () => {
+  try {
+    const parsed = JSON.parse(document.getElementById('json-editor').value);
+    DATA = {
+      notice: Array.isArray(parsed.notice) ? parsed.notice : [],
+      calendar: Array.isArray(parsed.calendar) ? parsed.calendar : [],
+      download: Array.isArray(parsed.download) ? parsed.download : []
+    };
+    renderTables();
+    showStatus('✅ 已從下方 JSON 原始碼更新上方表格！', 'ok');
+  } catch (e) {
+    showStatus('❌ JSON 格式有誤：' + e.message, 'err');
+  }
+};
+
+// 初始載入現有的 DOC/manifest.json
+async function loadCurrentManifest() {
+  for (const url of ['DOC/manifest.json', '/DOC/manifest.json']) {
+    try {
+      const r = await fetch(url + '?_=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) continue;
+      const j = await r.json();
+      DATA = {
+        notice: Array.isArray(j.notice) ? j.notice : [],
+        calendar: Array.isArray(j.calendar) ? j.calendar : [],
+        download: Array.isArray(j.download) ? j.download : []
+      };
+      renderTables();
+      showStatus('已載入目前的 DOC/manifest.json 清單。', 'info');
+      return;
+    } catch (_) {}
+  }
+  renderTables();
+}
+
+// 自動掃描目錄（依序嘗試：1. IIS list.ashx  2. GitHub API  3. 目錄瀏覽）
+async function scanDirectories() {
+  showStatus('⏳ 正在掃描伺服器目錄中的最新檔案…', 'info');
+  // 1. 嘗試 IIS list.ashx
+  try {
+    const r = await fetch('list.ashx?save=1&_=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && (j.notice || j.calendar || j.download)) {
+        DATA = { notice: j.notice || [], calendar: j.calendar || [], download: j.download || [] };
+        renderTables();
+        showStatus('✅ 已透過伺服器 (list.ashx) 掃描最新目錄並自動更新 DOC/manifest.json！', 'ok');
+        return;
+      }
+    }
+  } catch (_) {}
+
+  // 2. 嘗試 GitHub API 掃描
+  const repoPath = (ghRepoEl.value || 'AngeWoo/FollowerWeb').trim();
+  const branch = (ghBranchEl.value || 'main').trim();
+  const token = ghTokenEl.value.trim();
+  const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+  try {
+    const scanned = { notice: [], calendar: [], download: [] };
+    let anyOk = false;
+    for (const sec of ['notice', 'calendar', 'download']) {
+      for (const dirName of (sec === 'calendar' ? ['calendar', 'calender'] : [sec])) {
+        const apiUrl = `https://api.github.com/repos/${repoPath}/contents/DOC/${dirName}?ref=${encodeURIComponent(branch)}&_=${Date.now()}`;
+        const r = await fetch(apiUrl, { headers, cache: 'no-store' });
+        if (!r.ok) continue;
+        const arr = await r.json();
+        if (!Array.isArray(arr)) continue;
+        anyOk = true;
+        for (const x of arr) {
+          if (x.type !== 'file' || x.name.startsWith('.')) continue;
+          const ext = (x.name.split('.').pop() || '').toLowerCase();
+          if (!EXTS.includes(ext)) continue;
+          const old = (DATA[sec] || []).find(o => o.file === x.name);
+          const item = {
+            name: old ? old.name : x.name.replace(/\.[^.]+$/, ''),
+            file: x.name,
+            ext,
+            size: x.size || 0,
+            date: old && old.date ? old.date : todayStr()
+          };
+          if (dirName !== sec) item.dir = dirName;
+          scanned[sec].push(item);
+        }
+        scanned[sec].sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
+        break;
+      }
+    }
+    if (anyOk) {
+      DATA = scanned;
+      renderTables();
+      showStatus(`✅ 已從 GitHub (${repoPath}) 掃描最新上傳的目錄檔案！請點選「💾 立即儲存生效」或下載 manifest.json。`, 'ok');
+      return;
+    }
+  } catch (_) {}
+
+  showStatus('⚠️ 無法自動連線掃描目錄，您可以使用各區塊右上角的「📂 從電腦選檔帶入檔名」或手動新增。', 'err');
+}
+
+document.getElementById('btn-scan').onclick = scanDirectories;
+
+// 儲存至伺服器 (IIS list.ashx POST) 或 GitHub API
+document.getElementById('btn-save').onclick = async () => {
+  let bodyStr = document.getElementById('json-editor').value;
+  try {
+    const parsed = JSON.parse(bodyStr);
+    bodyStr = JSON.stringify(parsed);
+  } catch (e) {
+    showStatus('❌ JSON 格式錯誤，無法儲存：' + e.message, 'err');
+    return;
+  }
+
+  showStatus('⏳ 正在儲存 DOC/manifest.json…', 'info');
+
+  // 1. 先嘗試 IIS 伺服器直接寫入 (POST list.ashx)
+  try {
+    const r = await fetch('list.ashx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: bodyStr
+    });
+    if (r.ok) {
+      const res = await r.json();
+      if (res && res.ok) {
+        showStatus('✅ 已成功直接寫入伺服器的 DOC/manifest.json！前台網頁已立即生效！', 'ok');
+        return;
+      }
+    }
+  } catch (_) {}
+
+  // 2. 若設定了 GitHub Token，直接透過 GitHub API 更新 DOC/manifest.json
+  const token = ghTokenEl.value.trim();
+  const repoPath = (ghRepoEl.value || 'AngeWoo/FollowerWeb').trim();
+  const branch = (ghBranchEl.value || 'main').trim();
+  if (token && repoPath) {
+    try {
+      const apiUrl = `https://api.github.com/repos/${repoPath}/contents/DOC/manifest.json`;
+      const headers = {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      };
+      // 先取得目前檔案的 sha
+      let sha = undefined;
+      const getRes = await fetch(`${apiUrl}?ref=${encodeURIComponent(branch)}&_=${Date.now()}`, { headers });
+      if (getRes.ok) {
+        const info = await getRes.json();
+        sha = info.sha;
+      }
+      const b64 = btoa(unescape(encodeURIComponent(bodyStr)));
+      const putRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          message: 'Update DOC/manifest.json via admin panel',
+          content: b64,
+          branch,
+          ...(sha ? { sha } : {})
+        })
+      });
+      if (putRes.ok) {
+        try {
+          localStorage.setItem('adm_gh_repo', repoPath);
+          localStorage.setItem('adm_gh_branch', branch);
+          localStorage.setItem('adm_gh_token', token);
+        } catch (_) {}
+        showStatus('✅ 已成功直接更新 GitHub 上的 DOC/manifest.json！', 'ok');
+        return;
+      } else {
+        const errJson = await putRes.json().catch(() => ({}));
+        showStatus('❌ GitHub API 寫入失敗 (' + putRes.status + ')：' + (errJson.message || '請檢查 Token 權限'), 'err');
+        return;
+      }
+    } catch (e) {
+      showStatus('❌ GitHub 連線失敗：' + e.message, 'err');
+      return;
+    }
+  }
+
+  // 3. 若無 IIS 且未填 GitHub Token，展開 GitHub 設定提示並自動下載 manifest.json
+  document.getElementById('gh-details').open = true;
+  downloadManifest(bodyStr);
+  showStatus('ℹ️ 已為您下載最新的 <b>manifest.json</b>！請將它上傳至 <code>DOC/manifest.json</code>（或展開上方「⚙️ GitHub 遠端直接寫入設定」填入 Token 即可一鍵寫入）。', 'info');
+};
+
+function downloadManifest(content) {
+  const str = content || JSON.stringify({ notice: DATA.notice, calendar: DATA.calendar, download: DATA.download });
+  const blob = new Blob([str], { type: 'application/json;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'manifest.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+document.getElementById('btn-dl').onclick = () => {
+  try {
+    const parsed = JSON.parse(document.getElementById('json-editor').value);
+    downloadManifest(JSON.stringify(parsed));
+    showStatus('✅ 已下載 manifest.json，請放入 DOC/ 資料夾中。', 'ok');
+  } catch (e) {
+    showStatus('❌ JSON 格式有誤：' + e.message, 'err');
+  }
+};
+
+document.getElementById('btn-copy').onclick = async () => {
+  try {
+    const parsed = JSON.parse(document.getElementById('json-editor').value);
+    await navigator.clipboard.writeText(JSON.stringify(parsed));
+    showStatus('✅ 已複製 JSON 內容至剪貼簿！可直接貼到 DOC/manifest.json。', 'ok');
+  } catch (e) {
+    showStatus('❌ 複製失敗：' + e.message, 'err');
+  }
+};
+
+loadCurrentManifest();
+</script>
+</body>
+</html>

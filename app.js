@@ -58,34 +58,74 @@ async function fromJson(url, sec, root) {
     try { return await r.json(); } catch (_) { throw new Error(url + ' 非 JSON 回應'); }
   });
   const list = man[sec] || man[sec === 'calendar' ? 'calender' : sec] || [];
-  let dir = `${root}${sec}/`;
+  let resolvedDir = `${root}${sec}/`;
   if (sec === 'calendar' && list.length) {
-    try {
-      const r = await fetch(dir + encodeURIComponent(list[0].file), { method: 'HEAD' });
-      if (!r.ok) {
-        const alt = `${root}calender/`;
-        const r2 = await fetch(alt + encodeURIComponent(list[0].file), { method: 'HEAD' });
-        if (r2.ok) dir = alt;
-      }
-    } catch (_) {}
+    const pref = list[0].dir === 'calender' ? ['calender', 'calendar'] : ['calendar', 'calender'];
+    for (const d of pref) {
+      try {
+        const r = await fetch(`${root}${d}/` + encodeURIComponent(list[0].file), { method: 'HEAD' });
+        if (r.ok) { resolvedDir = `${root}${d}/`; break; }
+      } catch (_) {}
+    }
   }
   return list.map(i => {
     const f = i.file.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
-    return { ...i, date: f ? `${f[1]}-${f[2]}-${f[3]}` : i.date, path: dir + encodeURIComponent(i.file) };
-  }).sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
+    return { ...i, date: i.date || (f ? `${f[1]}-${f[2]}-${f[3]}` : ''), path: resolvedDir + encodeURIComponent(i.file) };
+  });
 }
-// DOC 可能在頁面所在資料夾（DOC/），也可能在網站根目錄（/DOC/），依序嘗試
+// 若網站架設在 GitHub Pages（如 AngeWoo/FollowerWeb），直接向 GitHub API 讀取最新檔案清單
+async function listGitHub(sec) {
+  let owner = 'AngeWoo', repo = 'FollowerWeb';
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+  if (m) {
+    owner = m[1];
+    const seg = location.pathname.split('/').filter(Boolean)[0];
+    if (seg) repo = seg;
+  } else if (!/github/i.test(location.hostname)) {
+    throw new Error('非 GitHub Pages');
+  }
+  for (const dirName of (sec === 'calendar' ? ['calendar', 'calender'] : [sec])) {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/DOC/${dirName}?_=` + Date.now(), { cache: 'no-store' });
+    if (!res.ok) continue;
+    const arr = await res.json();
+    if (!Array.isArray(arr)) continue;
+    const items = [];
+    for (const x of arr) {
+      if (x.type !== 'file' || x.name.startsWith('.')) continue;
+      const ext = (x.name.split('.').pop() || '').toLowerCase();
+      if (!EXTS.includes(ext)) continue;
+      const f = x.name.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
+      const f6 = !f && x.name.match(/^(\d{4})[-_.]?(\d{2})/);
+      const date = f ? `${f[1]}-${f[2]}-${f[3]}` : (f6 ? `${f6[1]}-${f6[2]}-01` : '');
+      items.push({
+        name: x.name.replace(/\.[^.]+$/, ''),
+        file: x.name,
+        ext,
+        size: x.size || 0,
+        date,
+        path: `DOC/${dirName}/` + encodeURIComponent(x.name)
+      });
+    }
+    items.sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
+    return items;
+  }
+  throw new Error('GitHub API 無法讀取 ' + sec);
+}
+// DOC 可能在頁面所在資料夾（DOC/），也可能在網站根目錄（/DOC/），優先讀取 manifest.json 讓後台修改立即生效
 const ROOTS = ['DOC/', '/DOC/'];
 const ERRS = {};
 async function load(sec) {
   const errs = [];
+  for (const root of ROOTS) {
+    try { return await fromJson(root + 'manifest.json', sec, root); } catch (e) { errs.push(e.message); }
+  }
   try { return await fromJson('list.ashx', sec, 'DOC/'); } catch (e) { errs.push(e.message); }
+  try { return await listGitHub(sec); } catch (e) { errs.push(e.message); }
   for (const root of ROOTS) {
     for (const dirName of (sec === 'calendar' ? ['calendar', 'calender'] : [sec])) {
       try { const x = await listDir(dirName, root); if (x.length) return x; errs.push(root + dirName + '/ 可讀取，但找不到 pdf/doc/docx 檔'); }
       catch (e) { errs.push(e.message); }
     }
-    try { return await fromJson(root + 'manifest.json', sec, root); } catch (e) { errs.push(e.message); }
   }
   ERRS[sec] = [...new Set(errs)].join('；'); return null;
 }
