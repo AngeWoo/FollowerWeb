@@ -28,7 +28,7 @@ const EXTS = ['pdf', 'doc', 'docx'];
 const pad = n => String(n).padStart(2, '0');
 async function listDir(sec, root) {
   const base = `${root}${sec}/`;
-  const res = await fetch(base + '?' + Date.now());
+  const res = await fetch(base + '?_=' + Date.now() + Math.random(), { cache: 'no-store' });   // 強制不用快取
   if (!res.ok) throw new Error(base + ' 回應 HTTP ' + res.status);
   const html = await res.text();
   const items = [], re = /([^<>]*?)<a\s+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
@@ -53,7 +53,7 @@ async function listDir(sec, root) {
 // 備援清單：DOC/manifest.json（在本機執行「更新清單.command」產生，連同檔案一起上傳）
 const MANS = {};
 async function fromManifest(sec, root) {
-  const man = MANS[root] = MANS[root] || await fetch(root + 'manifest.json?' + Date.now()).then(r => { if (!r.ok) throw new Error(root + 'manifest.json 回應 HTTP ' + r.status); return r.json(); });
+  const man = MANS[root] = MANS[root] || await fetch(root + 'manifest.json?_=' + Date.now() + Math.random(), { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(root + 'manifest.json 回應 HTTP ' + r.status); return r.json(); });
   return (man[sec] || []).map(i => {
     const f = i.file.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
     return { ...i, date: f ? `${f[1]}-${f[2]}-${f[3]}` : i.date, path: `${root}${sec}/` + i.file.replace(/[%#?]/g, encodeURIComponent) };

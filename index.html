@@ -2,9 +2,12 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>事務局 - 下載・公告・行事曆</title>
-<link rel="stylesheet" href="style.css">
+<script>document.write('<link rel="stylesheet" href="style.css?v='+Date.now()+'">')</script>
 </head>
 <body class="locked">
 <div id="gate">
@@ -41,7 +44,6 @@
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/docx-preview/0.3.3/docx-preview.min.js"></script>
-<script src="gate.js"></script>
-<script src="app.js"></script>
+<script>["gate.js","app.js"].forEach(function(s){document.write('<script src="'+s+'?v='+Date.now()+'"><\/script>')})</script>
 </body>
 </html>
