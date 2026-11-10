@@ -4,6 +4,10 @@ $manifestPath = Join-Path $root 'DOC\manifest.json'
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 function Get-ManifestJson {
+  $existing = $null
+  if (Test-Path -LiteralPath $manifestPath) {
+    try { $existing = [IO.File]::ReadAllText($manifestPath, $utf8NoBom) | ConvertFrom-Json } catch {}
+  }
   $out = [ordered]@{}
   foreach ($sec in 'notice','calendar','download') {
     $dir = Join-Path $root "DOC\$sec"
@@ -11,10 +15,14 @@ function Get-ManifestJson {
       $alt = Join-Path $root "DOC\calender"
       if (Test-Path -LiteralPath $alt) { $dir = $alt }
     }
+    $urlItems = @()
+    if ($existing -and $existing.$sec) {
+      $urlItems = @($existing.$sec | Where-Object { $_.file -match '^https://' })
+    }
     $items = @()
     if (Test-Path -LiteralPath $dir) {
       $items = @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -match '^\.(pdf|docx?)$' -and -not $_.Name.StartsWith('.') } |
+        Where-Object { $_.Extension -match '^\.(pdf|docx?|jpe?g)$' -and -not $_.Name.StartsWith('.') } |
         Sort-Object Name |
         ForEach-Object {
           [pscustomobject]@{
@@ -26,7 +34,7 @@ function Get-ManifestJson {
           }
         })
     }
-    $out[$sec] = $items
+    $out[$sec] = @($urlItems) + @($items)
   }
   return ($out | ConvertTo-Json -Depth 4 -Compress)
 }

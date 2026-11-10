@@ -106,6 +106,13 @@
   </div>
 </div>
 
+<div id="modal" hidden>
+  <div class="box">
+    <div class="bar"><b id="mtitle"></b><span><a id="mdl" download>下載</a><button type="button" id="mclose" aria-label="關閉">✕</button></span></div>
+    <div id="mbody"></div>
+  </div>
+</div>
+
 <script>
 // 後台獨立密碼驗證（預設密碼：shinnyo2026）
 const ADMIN_HASH = "e6da3ad9322c5368c3164933d46c59870cc1c91f201d8a5595503e24b750855a";
@@ -140,7 +147,22 @@ const SECS = [
   { key: 'calendar', title: '行事曆 (DOC/calendar/ 或 DOC/calender/)' },
   { key: 'download', title: '下載 (DOC/download/)' }
 ];
-const EXTS = ['pdf', 'doc', 'docx'];
+const EXTS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg'];
+const isHttpsUrl = s => /^https:\/\/\S+/i.test(String(s || '').trim());
+const detectExt = (fileOrUrl, fallback = '') => {
+  const s = String(fileOrUrl || '').trim();
+  if (isHttpsUrl(s)) {
+    try {
+      const pathname = new URL(s).pathname;
+      const m = pathname.match(/\.([a-z0-9]+)$/i);
+      if (m && EXTS.includes(m[1].toLowerCase())) return m[1].toLowerCase();
+    } catch (_) {}
+    return fallback === 'jpg' || fallback === 'jpeg' || fallback === 'pdf' ? fallback : 'url';
+  }
+  const ext = (s.split('.').pop() || '').toLowerCase();
+  return EXTS.includes(ext) ? ext : (fallback || '').toLowerCase();
+};
+const BLOB_URLS = {};
 const pad = n => String(n).padStart(2, '0');
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
 
@@ -183,18 +205,26 @@ function renderTables() {
   const container = document.getElementById('sections');
   container.innerHTML = SECS.map(s => {
     const list = DATA[s.key] || [];
-    const rows = list.length ? list.map((it, idx) => `
+    const rows = list.length ? list.map((it, idx) => {
+      const isUrl = isHttpsUrl(it.file);
+      const ext = detectExt(it.file, it.ext);
+      const isImg = ext === 'jpg' || ext === 'jpeg';
+      const pvLabel = (isUrl && !isImg) ? '🔗 開啟' : '👁️ 預覽';
+      const ph = isUrl ? 'https://example.com' : '檔案名稱.pdf / .jpg 或 https://...';
+      return `
       <tr>
-        <td><input type="text" data-sec="${s.key}" data-idx="${idx}" data-field="name" value="${esc(it.name)}"></td>
-        <td><input type="text" data-sec="${s.key}" data-idx="${idx}" data-field="file" value="${esc(it.file)}"></td>
+        <td><input type="text" data-sec="${s.key}" data-idx="${idx}" data-field="name" value="${esc(it.name)}" placeholder="顯示標題"></td>
+        <td><input type="text" data-sec="${s.key}" data-idx="${idx}" data-field="file" value="${esc(it.file)}" placeholder="${ph}"></td>
         <td style="width:145px"><input type="date" data-sec="${s.key}" data-idx="${idx}" data-field="date" value="${esc(it.date)}"></td>
-        <td style="width:130px;text-align:center;white-space:nowrap">
+        <td style="width:195px;text-align:center;white-space:nowrap">
+          <button type="button" class="btn sm" onclick="previewItem('${s.key}',${idx})" title="預覽圖檔/檔案或開啟連結">${pvLabel}</button>
           <button type="button" class="btn sm sec" onclick="moveItem('${s.key}',${idx},-1)" title="上移">▲</button>
           <button type="button" class="btn sm sec" onclick="moveItem('${s.key}',${idx},1)" title="下移">▼</button>
           <button type="button" class="btn del" onclick="removeItem('${s.key}',${idx})" title="刪除">✕</button>
         </td>
       </tr>
-    `).join('') : `<tr><td colspan="4" style="text-align:center;color:#889;padding:16px">目前沒有項目，請點上方「自動掃描」或右方「＋ 新增」</td></tr>`;
+    `;
+    }).join('') : `<tr><td colspan="4" style="text-align:center;color:#889;padding:16px">目前沒有項目，請點上方「自動掃描」或右方「＋ 新增」</td></tr>`;
 
     return `
       <div class="sec-box">
@@ -202,19 +232,20 @@ function renderTables() {
           <h3>📁 ${s.title} <small style="color:#778;font-weight:normal">（共 ${list.length} 筆）</small></h3>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <label class="btn sm sec" style="cursor:pointer">
-              📂 從電腦選檔帶入檔名
-              <input type="file" multiple accept=".pdf,.doc,.docx" style="display:none" onchange="pickFiles('${s.key}', this.files); this.value='';">
+              📂 從電腦選檔帶入 (.pdf/.docx/.jpg)
+              <input type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg" style="display:none" onchange="pickFiles('${s.key}', this.files); this.value='';">
             </label>
-            <button type="button" class="btn sm" onclick="addItem('${s.key}')">＋ 手動新增一筆</button>
+            <button type="button" class="btn sm" onclick="addItem('${s.key}')">＋ 新增檔案</button>
+            <button type="button" class="btn sm pri" onclick="addUrlItem('${s.key}')">🔗 新增 HTTPS 連結</button>
           </div>
         </div>
         <table class="adm-tbl">
           <thead>
             <tr>
               <th>顯示標題 (name)</th>
-              <th>實際檔案名稱 (file，含 .pdf / .docx)</th>
+              <th>檔案名稱或 HTTPS 網址 (含 .pdf / .docx / .jpg 或 https://...)</th>
               <th>日期 (date)</th>
-              <th style="text-align:center">排序 / 刪除</th>
+              <th style="text-align:center">預覽 / 排序 / 刪除</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -231,12 +262,16 @@ document.getElementById('sections').addEventListener('input', e => {
   if (!sec || isNaN(idx) || !field) return;
   const item = DATA[sec][idx];
   if (!item) return;
-  item[field] = el.value;
+  const val = el.value.trim();
+  item[field] = field === 'file' ? val : el.value;
   if (field === 'file') {
-    const ext = (el.value.split('.').pop() || '').toLowerCase();
-    if (EXTS.includes(ext)) item.ext = ext;
-    if (!item.name || item.name === el.defaultValue.replace(/\.[^.]+$/, '')) {
-      item.name = el.value.replace(/\.[^.]+$/, '');
+    if (/^http:\/\//i.test(val)) {
+      showStatus('⚠️ 請使用 https:// 開頭的安全網址（不支援 http://）。', 'err');
+    }
+    const detected = detectExt(val, item.ext);
+    if (detected) item.ext = detected;
+    if (!isHttpsUrl(val) && (!item.name || item.name === el.defaultValue.replace(/\.[^.]+$/, ''))) {
+      item.name = val.replace(/\.[^.]+$/, '');
     }
   }
   syncJsonEditor();
@@ -244,8 +279,15 @@ document.getElementById('sections').addEventListener('input', e => {
 
 window.addItem = function(sec) {
   DATA[sec] = DATA[sec] || [];
-  DATA[sec].unshift({ name: '新檔案標題', file: '檔案名稱.pdf', ext: 'pdf', size: 0, date: todayStr() });
+  DATA[sec].unshift({ name: '新檔案標題', file: '檔案名稱.jpg', ext: 'jpg', size: 0, date: todayStr() });
   renderTables();
+};
+
+window.addUrlItem = function(sec) {
+  DATA[sec] = DATA[sec] || [];
+  DATA[sec].unshift({ name: '新外部連結', file: 'https://', ext: 'url', size: 0, date: todayStr() });
+  renderTables();
+  showStatus('🔗 已新增一筆 HTTPS 連結項目，請填入「顯示標題」與「https://...」完整網址。', 'info');
 };
 
 window.removeItem = function(sec, idx) {
@@ -266,10 +308,16 @@ window.moveItem = function(sec, idx, dir) {
 window.pickFiles = function(sec, files) {
   if (!files || !files.length) return;
   DATA[sec] = DATA[sec] || [];
+  let added = 0;
   for (const f of files) {
     if (f.name.startsWith('.')) continue;
     const ext = (f.name.split('.').pop() || '').toLowerCase();
     if (!EXTS.includes(ext)) continue;
+    try {
+      const key = sec + ':' + f.name;
+      if (BLOB_URLS[key]) URL.revokeObjectURL(BLOB_URLS[key]);
+      BLOB_URLS[key] = URL.createObjectURL(f);
+    } catch (_) {}
     const d = f.lastModified ? new Date(f.lastModified) : new Date();
     const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     const baseName = f.name.replace(/\.[^.]+$/, '');
@@ -277,9 +325,67 @@ window.pickFiles = function(sec, files) {
     const entry = { name: baseName, file: f.name, ext, size: f.size || 0, date: dateStr };
     if (existIdx >= 0) DATA[sec][existIdx] = { ...DATA[sec][existIdx], ...entry };
     else DATA[sec].unshift(entry);
+    added++;
   }
   renderTables();
-  showStatus(`✅ 已帶入 ${files.length} 個檔案至「${sec}」，請確認無誤後點選「💾 立即儲存生效」。`, 'ok');
+  showStatus(`✅ 已帶入 ${added} 個檔案至「${sec}」（可點選「👁️ 預覽」檢視圖檔/PDF），請確認無誤後點選「💾 立即儲存生效」。`, 'ok');
+};
+
+// 後台預覽彈窗（支援 .jpg/.jpeg 圖檔、.pdf 與 https:// 連結）
+const modal = document.getElementById('modal'), mbody = document.getElementById('mbody');
+function closeModal() { modal.hidden = true; mbody.innerHTML = ''; }
+document.getElementById('mclose').onclick = closeModal;
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+window.previewItem = function(sec, idx) {
+  const it = (DATA[sec] || [])[idx];
+  if (!it) return;
+  const raw = String(it.file || '').trim();
+  if (!raw || raw === 'https://') {
+    showStatus('⚠️ 請先輸入完整的檔案名稱或 https:// 網址。', 'err');
+    return;
+  }
+  if (/^http:\/\//i.test(raw)) {
+    showStatus('❌ 不支援 http:// 網址，請改用 https:// 開頭的安全網址。', 'err');
+    return;
+  }
+  const isUrl = isHttpsUrl(raw);
+  const ext = detectExt(raw, it.ext);
+  const isImg = ext === 'jpg' || ext === 'jpeg';
+  if (isUrl && !isImg) {
+    window.open(raw, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  const blobUrl = !isUrl && BLOB_URLS[sec + ':' + raw];
+  const url = blobUrl || (isUrl ? raw : `DOC/${it.dir || sec}/${encodeURIComponent(raw)}`);
+  const fname = it.name || raw;
+  document.getElementById('mtitle').textContent = `${fname} (${raw})`;
+  const dl = document.getElementById('mdl');
+  dl.href = url;
+  if (isUrl) {
+    dl.textContent = '開啟原連結';
+    dl.removeAttribute('download');
+    dl.target = '_blank';
+    dl.rel = 'noopener noreferrer';
+  } else {
+    dl.textContent = '下載 / 開啟';
+    dl.download = raw;
+    dl.removeAttribute('target');
+    dl.removeAttribute('rel');
+  }
+  modal.hidden = false;
+  if (isImg) {
+    mbody.innerHTML = `<div class="img-pv"><img src="${esc(url)}" alt="${esc(fname)}"></div>`;
+    const img = mbody.querySelector('img');
+    if (img) img.onerror = () => {
+      mbody.innerHTML = `<div class="msg">無法載入圖片 <code>${esc(raw)}</code>。<br>若為新檔案，請確認已將圖檔放入 <code>DOC/${esc(it.dir || sec)}/</code> 資料夾，或使用「📂 從電腦選檔帶入」預覽。</div>`;
+    };
+  } else if (ext === 'pdf') {
+    mbody.innerHTML = `<iframe src="${esc(url)}"></iframe>`;
+  } else {
+    mbody.innerHTML = `<div class="msg">此格式 (<code>.${esc(ext)}</code>) 請點選右上角「下載 / 開啟」檢視。</div>`;
+  }
 };
 
 document.getElementById('btn-apply-json').onclick = () => {
@@ -317,24 +423,78 @@ async function loadCurrentManifest() {
   renderTables();
 }
 
-// 自動掃描目錄（依序嘗試：1. IIS list.ashx  2. GitHub API  3. 目錄瀏覽）
+// 合併掃描結果時，保留原本已設定的 https:// 外部連結項目
+function mergeWithHttpsUrls(sec, scannedList) {
+  const existingUrls = (DATA[sec] || []).filter(x => x && isHttpsUrl(x.file));
+  return [...existingUrls, ...(scannedList || [])];
+}
+
+// 自動掃描目錄（依序嘗試：1. IIS list.ashx  2. 本機 Nginx/IIS 目錄瀏覽  3. GitHub API）
 async function scanDirectories() {
-  showStatus('⏳ 正在掃描伺服器目錄中的最新檔案…', 'info');
+  showStatus('⏳ 正在掃描伺服器目錄中的最新檔案（含 .pdf / .docx / .jpg）…', 'info');
   // 1. 嘗試 IIS list.ashx
   try {
     const r = await fetch('list.ashx?save=1&_=' + Date.now(), { cache: 'no-store' });
     if (r.ok) {
       const j = await r.json();
       if (j && (j.notice || j.calendar || j.download)) {
-        DATA = { notice: j.notice || [], calendar: j.calendar || [], download: j.download || [] };
+        DATA = {
+          notice: mergeWithHttpsUrls('notice', j.notice),
+          calendar: mergeWithHttpsUrls('calendar', j.calendar),
+          download: mergeWithHttpsUrls('download', j.download)
+        };
         renderTables();
-        showStatus('✅ 已透過伺服器 (list.ashx) 掃描最新目錄並自動更新 DOC/manifest.json！', 'ok');
+        showStatus('✅ 已透過伺服器 (list.ashx) 掃描最新目錄並保留 HTTPS 連結！', 'ok');
         return;
       }
     }
   } catch (_) {}
 
-  // 2. 嘗試 GitHub API 掃描
+  // 2. 嘗試 Nginx autoindex / IIS Directory Browsing 掃描本機 DOC/<sec>/
+  try {
+    const scanned = { notice: [], calendar: [], download: [] };
+    let anyDirOk = false;
+    for (const sec of ['notice', 'calendar', 'download']) {
+      for (const dirName of (sec === 'calendar' ? ['calendar', 'calender'] : [sec])) {
+        const base = `DOC/${dirName}/`;
+        const r = await fetch(base + '?_=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) continue;
+        const html = await r.text();
+        if (!/<a\s+href=/i.test(html)) continue;
+        anyDirOk = true;
+        const re = /([^<>]*?)<a\s+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
+        let m;
+        while ((m = re.exec(html))) {
+          const href = m[2];
+          if (/\/$/.test(href) || href.startsWith('?')) continue;
+          const file = decodeURIComponent(new URL(href, new URL(base, location.href)).pathname.split('/').pop());
+          const ext = (file.split('.').pop() || '').toLowerCase();
+          if (!EXTS.includes(ext) || file.startsWith('.')) continue;
+          const old = (DATA[sec] || []).find(o => o.file === file);
+          const item = {
+            name: old ? old.name : file.replace(/\.[^.]+$/, ''),
+            file,
+            ext,
+            size: old && old.size ? old.size : 0,
+            date: old && old.date ? old.date : todayStr()
+          };
+          if (dirName !== sec) item.dir = dirName;
+          scanned[sec].push(item);
+        }
+        scanned[sec].sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
+        break;
+      }
+      scanned[sec] = mergeWithHttpsUrls(sec, scanned[sec]);
+    }
+    if (anyDirOk) {
+      DATA = scanned;
+      renderTables();
+      showStatus('✅ 已掃描伺服器 DOC/ 目錄中的最新檔案（並保留原有的 HTTPS 連結）！請點選「💾 立即儲存生效」。', 'ok');
+      return;
+    }
+  } catch (_) {}
+
+  // 3. 嘗試 GitHub API 掃描
   const repoPath = (ghRepoEl.value || 'AngeWoo/FollowerWeb').trim();
   const branch = (ghBranchEl.value || 'main').trim();
   const token = ghTokenEl.value.trim();
@@ -368,16 +528,17 @@ async function scanDirectories() {
         scanned[sec].sort((a, b) => (b.date + b.file).localeCompare(a.date + a.file, 'zh-Hant'));
         break;
       }
+      scanned[sec] = mergeWithHttpsUrls(sec, scanned[sec]);
     }
     if (anyOk) {
       DATA = scanned;
       renderTables();
-      showStatus(`✅ 已從 GitHub (${repoPath}) 掃描最新上傳的目錄檔案！請點選「💾 立即儲存生效」或下載 manifest.json。`, 'ok');
+      showStatus(`✅ 已從 GitHub (${repoPath}) 掃描最新上傳的目錄檔案（並保留原有的 HTTPS 連結）！請點選「💾 立即儲存生效」或下載 manifest.json。`, 'ok');
       return;
     }
   } catch (_) {}
 
-  showStatus('⚠️ 無法自動連線掃描目錄，您可以使用各區塊右上角的「📂 從電腦選檔帶入檔名」或手動新增。', 'err');
+  showStatus('⚠️ 無法自動連線掃描目錄，您可以使用各區塊右上角的「📂 從電腦選檔帶入」或手動新增。', 'err');
 }
 
 document.getElementById('btn-scan').onclick = scanDirectories;
@@ -387,6 +548,14 @@ document.getElementById('btn-save').onclick = async () => {
   let bodyStr = document.getElementById('json-editor').value;
   try {
     const parsed = JSON.parse(bodyStr);
+    for (const sec of ['notice', 'calendar', 'download']) {
+      for (const it of (parsed[sec] || [])) {
+        if (/^http:\/\//i.test(String(it.file || '').trim())) {
+          showStatus(`❌ 「${it.name || it.file}」使用了不安全的 http://，請改為 https:// 開頭的網址後再儲存。`, 'err');
+          return;
+        }
+      }
+    }
     bodyStr = JSON.stringify(parsed);
   } catch (e) {
     showStatus('❌ JSON 格式錯誤，無法儲存：' + e.message, 'err');

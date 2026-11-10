@@ -46,9 +46,20 @@ function render(sec, items, page = PAGES[sec] || 1) {
   page = Math.min(Math.max(1, page), totalPages);
   PAGES[sec] = page;
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  ul.innerHTML = pageItems.map(i => `<li>
-    <a class="pv" href="${i.path}" data-p="${esc(i.path)}" data-f="${esc(i.file)}" data-s="${sec}">${esc(i.name)}</a>
-    <span class="btns"><a class="dl" href="${i.path}" download="${esc(i.file)}">下載 ${i.ext === 'pdf' ? 'PDF' : 'Word'}</a></span></li>`).join('');
+  ul.innerHTML = pageItems.map(i => {
+    const isUrl = !!i.isUrl || /^https:\/\//i.test(i.path);
+    const isImg = i.ext === 'jpg' || i.ext === 'jpeg';
+    const dlLabel = isUrl ? (isImg ? '開啟圖檔' : '開啟連結') : (i.ext === 'pdf' ? '下載 PDF' : isImg ? '下載 JPG' : '下載 Word');
+    const dlAttrs = isUrl
+      ? `href="${esc(i.path)}" target="_blank" rel="noopener noreferrer"`
+      : `href="${esc(i.path)}" download="${esc(i.file)}"`;
+    const titleAttrs = (isUrl && !isImg)
+      ? `class="pv ext-url" href="${esc(i.path)}" target="_blank" rel="noopener noreferrer"`
+      : `class="pv" href="${esc(i.path)}" data-p="${esc(i.path)}" data-f="${esc(i.file)}" data-s="${sec}" data-ext="${esc(i.ext || '')}"`;
+    return `<li>
+    <a ${titleAttrs}>${esc(i.name)}</a>
+    <span class="btns"><a class="dl" ${dlAttrs}>${dlLabel}</a></span></li>`;
+  }).join('');
 
   let btns = `<button type="button" class="pg-btn" data-sec="${sec}" data-pg="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一頁</button>`;
   for (let p = 1; p <= totalPages; p++) {
@@ -60,7 +71,21 @@ function render(sec, items, page = PAGES[sec] || 1) {
 }
 
 // 讀取 DOC/<區>/ 的目錄瀏覽清單（IIS Directory Browsing / Nginx autoindex 皆可）
-const EXTS = ['pdf', 'doc', 'docx'];
+const EXTS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg'];
+const isHttpsUrl = s => /^https:\/\/\S+/i.test(String(s || '').trim());
+const detectExt = (fileOrUrl, fallback = '') => {
+  const s = String(fileOrUrl || '').trim();
+  if (isHttpsUrl(s)) {
+    try {
+      const pathname = new URL(s).pathname;
+      const m = pathname.match(/\.([a-z0-9]+)$/i);
+      if (m && EXTS.includes(m[1].toLowerCase())) return m[1].toLowerCase();
+    } catch (_) {}
+    return fallback ? fallback.toLowerCase() : 'url';
+  }
+  const ext = (s.split('.').pop() || '').toLowerCase();
+  return EXTS.includes(ext) ? ext : (fallback || '').toLowerCase();
+};
 const pad = n => String(n).padStart(2, '0');
 async function listDir(sec, root) {
   const base = `${root}${sec}/`;
@@ -96,17 +121,30 @@ async function fromJson(url, sec, root) {
   const list = man[sec] || man[sec === 'calendar' ? 'calender' : sec] || [];
   let resolvedDir = `${root}${sec}/`;
   if (sec === 'calendar' && list.length) {
-    const pref = list[0].dir === 'calender' ? ['calender', 'calendar'] : ['calendar', 'calender'];
-    for (const d of pref) {
-      try {
-        const r = await fetch(`${root}${d}/` + encodeURIComponent(list[0].file), { method: 'HEAD' });
-        if (r.ok) { resolvedDir = `${root}${d}/`; break; }
-      } catch (_) {}
+    const sample = list.find(x => x && x.file && !isHttpsUrl(x.file));
+    if (sample) {
+      const pref = sample.dir === 'calender' ? ['calender', 'calendar'] : ['calendar', 'calender'];
+      for (const d of pref) {
+        try {
+          const r = await fetch(`${root}${d}/` + encodeURIComponent(sample.file), { method: 'HEAD' });
+          if (r.ok) { resolvedDir = `${root}${d}/`; break; }
+        } catch (_) {}
+      }
     }
   }
   return list.map(i => {
-    const f = i.file.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
-    return { ...i, date: i.date || (f ? `${f[1]}-${f[2]}-${f[3]}` : ''), path: resolvedDir + encodeURIComponent(i.file) };
+    const rawFile = String(i.url || i.file || '').trim();
+    const isUrl = isHttpsUrl(rawFile);
+    const ext = detectExt(rawFile, i.ext);
+    const f = !isUrl && rawFile.match(/^(\d{4})[-_.]?(\d{2})[-_.]?(\d{2})/);
+    return {
+      ...i,
+      file: rawFile,
+      ext,
+      isUrl,
+      date: i.date || (f ? `${f[1]}-${f[2]}-${f[3]}` : ''),
+      path: isUrl ? rawFile : resolvedDir + encodeURIComponent(rawFile)
+    };
   });
 }
 // 若網站架設在 GitHub Pages（如 AngeWoo/FollowerWeb），直接向 GitHub API 讀取最新檔案清單
@@ -159,7 +197,7 @@ async function load(sec) {
   try { return await listGitHub(sec); } catch (e) { errs.push(e.message); }
   for (const root of ROOTS) {
     for (const dirName of (sec === 'calendar' ? ['calendar', 'calender'] : [sec])) {
-      try { const x = await listDir(dirName, root); if (x.length) return x; errs.push(root + dirName + '/ 可讀取，但找不到 pdf/doc/docx 檔'); }
+      try { const x = await listDir(dirName, root); if (x.length) return x; errs.push(root + dirName + '/ 可讀取，但找不到 pdf/doc/docx/jpg 檔'); }
       catch (e) { errs.push(e.message); }
     }
   }
@@ -171,7 +209,7 @@ Promise.all(TABS.map(t => load(t).then(items => { LISTS[t] = items || []; render
 function openByHash() {
   const [t, f] = hashParts(); if (!f) return;
   const it = (LISTS[t] || []).find(i => i.file === f);
-  if (it) preview(it.path, false);
+  if (it && !(it.isUrl && it.ext !== 'jpg' && it.ext !== 'jpeg')) preview(it.path, false, t, it.file, it.ext);
 }
 
 show(hashParts()[0]);
@@ -186,15 +224,33 @@ document.getElementById('mclose').onclick = closeModal;
 modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-async function preview(path, setHash = true, sec = '', file = '') {
-  if (setHash && sec) history.replaceState(null, '', '#' + sec + '/' + file);
-  const url = path, ext = path.split('.').pop().toLowerCase();
+async function preview(path, setHash = true, sec = '', file = '', extHint = '') {
+  const isUrl = isHttpsUrl(path);
+  if (setHash && sec && !isUrl) history.replaceState(null, '', '#' + sec + '/' + file);
+  const url = path;
+  const ext = (extHint || detectExt(path)).toLowerCase();
   const fname = file || decodeURIComponent(path.split('/').pop());
   document.getElementById('mtitle').textContent = fname;
-  const dl = document.getElementById('mdl'); dl.href = url; dl.download = fname;
+  const dl = document.getElementById('mdl');
+  dl.href = url;
+  if (isUrl) {
+    dl.textContent = '開啟原連結';
+    dl.removeAttribute('download');
+    dl.target = '_blank';
+    dl.rel = 'noopener noreferrer';
+  } else {
+    dl.textContent = '下載';
+    dl.download = fname;
+    dl.removeAttribute('target');
+    dl.removeAttribute('rel');
+  }
   mbody.innerHTML = '<div class="msg">載入中…</div>';
   modal.hidden = false;
-  if (ext === 'pdf') {
+  if (ext === 'jpg' || ext === 'jpeg') {
+    mbody.innerHTML = `<div class="img-pv"><img src="${esc(url)}" alt="${esc(fname)}"></div>`;
+    const img = mbody.querySelector('img');
+    if (img) img.onerror = () => { mbody.innerHTML = '<div class="msg">無法載入圖片，請確認圖檔已上傳至對應目錄或點擊右上角開啟。</div>'; };
+  } else if (ext === 'pdf') {
     mbody.innerHTML = `<iframe src="${url}"></iframe>`;
   } else if (ext === 'docx' && window.docx) {
     try {
@@ -224,5 +280,8 @@ document.addEventListener('click', e => {
     return;
   }
   const a = e.target.closest('a.pv');
-  if (a) { e.preventDefault(); preview(a.dataset.p, true, a.dataset.s, a.dataset.f); }
+  if (a && !a.classList.contains('ext-url')) {
+    e.preventDefault();
+    preview(a.dataset.p, true, a.dataset.s, a.dataset.f, a.dataset.ext);
+  }
 });

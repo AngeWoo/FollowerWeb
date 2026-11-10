@@ -6,7 +6,7 @@ using System.Web;
 
 public class DocList : IHttpHandler {
     static readonly string[] Secs = { "notice", "calendar", "download" };
-    static readonly string[] Exts = { ".pdf", ".doc", ".docx" };
+    static readonly string[] Exts = { ".pdf", ".doc", ".docx", ".jpg", ".jpeg" };
 
     static string Esc(string s) {
         return s.Replace("\\", "\\\\").Replace("\"", "\\\"");
