@@ -2,16 +2,16 @@
 body{margin:0;font:18px/1.6 "PingFang TC","Microsoft JhengHei",sans-serif;color:#333;
  background:linear-gradient(180deg,#fff 0,#dfeaf6 380px,#fff 900px) no-repeat,#fff;min-height:100vh}
 #wrap{width:min(1000px,100%);margin:0 auto}
-#banner{position:relative;height:210px;
- background:linear-gradient(100deg,#c9a9a4 0,#9fb89a 22%,#cfd6d8 45%,#8f9a98 70%,#c5d3e0 100%);
- border-radius:0 0 0 0}
-.zone{position:absolute;left:40px;top:70px;font-size:34px;letter-spacing:6px;color:#e8eef0;text-shadow:0 1px 3px #5a6a6a}
-nav{position:absolute;left:40px;right:30px;bottom:0;display:flex;background:rgba(95,95,95,.88)}
+#banner{position:relative;margin:12px 16px 14px;padding-top:calc((100% - 32px) * 140 / 1024);
+ background:url("banner.jpg") center top/100% auto no-repeat,rgba(95,95,95,.88);
+ border-radius:26px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.zone{display:none}
+nav{position:relative;display:flex;background:rgba(95,95,95,.88)}
 nav a{flex:1;text-align:center;color:#eee;text-decoration:none;font-size:16px;font-weight:bold;letter-spacing:2px;padding:9px 4px;border-left:1px solid #888;white-space:nowrap}
 nav a:first-child{border-left:0}
 nav a.on,nav a:hover{background:rgba(160,130,95,.9);color:#fff}
-#card{background:linear-gradient(180deg,#fff 60%,#eef4fb);margin:0 16px;border-radius:26px 26px 26px 26px;
- box-shadow:0 3px 10px rgba(0,0,0,.3);padding:12px 60px 90px;min-height:560px;position:relative;top:-6px}
+#card{background:linear-gradient(180deg,#fff 60%,#eef4fb);margin:0 16px;border-radius:26px;
+ box-shadow:0 3px 10px rgba(0,0,0,.3);padding:12px 60px 90px;min-height:560px;position:relative}
 .crumb{color:#000;font-size:18px;margin:0 0 30px -4px;padding-top:6px}
 section{display:none}section.on{display:block}
 h2{margin:0 0 30px;text-align:center;color:#a0825a;font-size:30px;letter-spacing:3px;padding-bottom:12px;border-bottom:4px solid #e6d9c3}
@@ -40,8 +40,9 @@ footer{text-align:center;color:#555;padding:18px 8px 40px;font-size:20px;letter-
 #mbody .msg{padding:40px;text-align:center;color:#556}
 #mbody .docx-wrapper{padding:12px!important;background:#e8ebef!important}
 @media(max-width:700px){
- #card{padding:12px 16px 50px;margin:0 6px}.zone{left:16px;font-size:26px;top:70px}
- nav{left:6px;right:6px}nav a{font-size:13px;letter-spacing:0}
+ #banner{margin:8px 6px 10px;padding-top:95px;background-size:100% 95px;background-position:left top;border-radius:20px}
+ #card{padding:12px 16px 50px;margin:0 6px;border-radius:20px}.zone{left:16px;font-size:26px;top:70px}
+ nav a{font-size:13px;letter-spacing:0}
  .list a.pv{font-size:18px}.head{padding-left:30px}.head span:last-child{width:110px}
  .btns{width:auto}.view{display:none}.list{padding-right:0}
  h2{font-size:24px}footer{font-size:14px}}
